@@ -53,7 +53,7 @@ const uint8_t IOvalue[12] = {
 
 //globals
 uint8_t LED;
-uint8_t values[12];
+volatile uint8_t values[12];
 
 int main(void)
 {
@@ -61,7 +61,7 @@ int main(void)
 	//configure timers
 	//using timer 0 for plexing LEDs
 	TCCR0A = 0;
-	TCCR0B = (1<<CS00); //timer clock no div
+	TCCR0B = (1<<CS01); //timer clock div/8
 	
 	TIMSK = (1<<OCIE0A) | (1<<TOIE0); //compare match A interrupt and overflow interrupt enabled
 	
@@ -84,9 +84,10 @@ int main(void)
 
 //timer compare match interrupt. Turn off led on compare
 ISR(TIMER0_COMPA_vect){
-	
+
 	//turn off LED
-	PORTB=0;
+	DDRB=0;
+
 }
 
 //timer overflow interrupt. Turn on next LED on overflow
@@ -94,18 +95,27 @@ ISR(TIMER0_OVF_vect){
 	
 	//turn on next LED
 	LED++;
-	if(LED>11)LED=0;
+	if(LED>11) LED=0;
 	
 	//return if LED PWM value is 0
 	if(values[LED]==0) return;
+	
+	//stop timer
+	TCCR0B = 0;
+	
+	//load compare value
+	OCR0A = values[LED];
+	
+	//clear count
+	TCNT0 = 0;
 	
 	//set direction and IO register for this LED
 	DDRB=IOdirection[LED];
 	PORTB=IOvalue[LED];
 	
-	//load compare value
-	OCR0A = values[LED];
+	//clear interrupt, clear prescailer, start timer
+	TIFR = (1<<OCF0A);
+	GTCCR = (1<<PSR0);
+	TCCR0B = (1<<CS01);
 	
-	//see if we missed count
-	if(TCNT0 > values[LED]) PORTB=0;
 }
